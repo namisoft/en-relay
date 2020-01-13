@@ -166,7 +166,7 @@ const methods = {
         return getProofObj.transactionProof(txHash).then(r =>{
             return {
                 proof: '0x' + rlp.encode(r.txProof).toString('hex'),
-                path: '0x' + rlp.encode(r.txIndex).toString('hex')
+                path: '0x' + rlp.encode([r.txIndex]).toString('hex')
             };
         });
     }
