@@ -16,9 +16,10 @@ pragma solidity ^0.5.0;
  		uint receiptsRoot;
  		uint number;
  		uint difficulty;
- 		uint totalDifficulty;	// total difficulty until this block
  		uint time;
  		uint hash;
+		uint linkCheckpoint;	// the latest checkpoint that block links back to
+		uint accumulativeDiff;	// accumulative difficulty from latest checkpoint until this block
  	}
 
  	// The first block header hash
@@ -43,14 +44,18 @@ pragma solidity ^0.5.0;
 
  	// Block header hash that points to longest chain head
  	// (please note that 'longest' chain is based on total difficulty)
- 	uint public longestChainHead;
+ 	// uint public longestChainHead;
+
+	 // Longest branch head of each checkpoint, in the form: (checkpoint block hash) => (head block hash)
+	 // (note that 'longest branch' means the branch which has biggest cumulative difficulty from checkpoint)
+	 mapping(uint => uint) public longestBranchHead;
 
  	// Checkpoint blocks
 	 mapping(uint => bool) checkpointBlocks;
 	 // Checkpoint block by height
 	 mapping(uint => bool) checkpointBlocksByHeight;
 	 // Latest check point block
-	 uint latestCheckpoint;
+	 uint public latestCheckpoint;
 
  	constructor() public {
 

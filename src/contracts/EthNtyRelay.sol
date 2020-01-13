@@ -28,8 +28,9 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
 
     uint public finalityConfirms;
 
-    // Set the first block (must be implemented by sub class)
-    function _setFirstBlock() internal;
+    // Define the first block (must be implemented by sub class)
+    function _defineFirstBlock() internal returns (RelayedBlockHeader memory) ;
+
     // Set checkpoint contract info (must be implemented by sub class)
     function _setCheckpointContractInfo() internal;
 
@@ -39,6 +40,30 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
         _setFirstBlock();
 
         _setCheckpointContractInfo();
+    }
+
+    function _setFirstBlock() private{
+        RelayedBlockHeader memory toSetBlock = _defineFirstBlock();
+
+        firstBlock = toSetBlock.hash;
+
+        blocks[toSetBlock.hash] = toSetBlock;
+        blockExisting[toSetBlock.hash] = true;
+
+        verifiedBlocks[toSetBlock.hash] = true;
+        finalizedBlocks[toSetBlock.hash] = true;
+
+        blocksByHeight[toSetBlock.number].push(toSetBlock.hash);
+        blocksByHeightExisting[toSetBlock.number] = true;
+
+        blockHeightMax = toSetBlock.number;
+
+        longestBranchHead[toSetBlock.hash] = toSetBlock.hash;
+
+        // Mark block as checkpoint block
+        checkpointBlocks[toSetBlock.hash] = true;
+        checkpointBlocksByHeight[toSetBlock.number] = true;
+        latestCheckpoint = toSetBlock.hash;
     }
 
 
@@ -55,10 +80,10 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
 
     function relayBlock(bytes memory _rlpHeader) public payable returns (bool) {
         // Calculate block header hash
-        uint headerHash = EthCommon.calcBlockHeaderHash(_rlpHeader);
+        uint blockHash = EthCommon.calcBlockHeaderHash(_rlpHeader);
 
         // Check block existing
-        require(!blockExisting[headerHash], "Relay block failed: block already relayed");
+        require(!blockExisting[blockHash], "Relay block failed: block already relayed");
 
         // Parse rlp-encoded block header into structure
         EthCommon.BlockHeader memory header = EthCommon.parseBlockHeader(_rlpHeader);
@@ -88,25 +113,27 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
             receiptsRoot : header.receiptsRoot,
             number : header.number,
             difficulty : header.difficulty,
-            totalDifficulty : blocks[header.parentHash].totalDifficulty.add(header.difficulty),
             time : header.timestamp,
-            hash : headerHash
+            hash : blockHash,
+            linkCheckpoint: blocks[header.parentHash].linkCheckpoint,
+            accumulativeDiff : blocks[header.parentHash].accumulativeDiff.add(header.difficulty)
             });
 
-        blocks[headerHash] = relayedBlock;
-        blockExisting[headerHash] = true;
-        verifiedBlocks[headerHash] = true;
+        blocks[blockHash] = relayedBlock;
+        blockExisting[blockHash] = true;
+        verifiedBlocks[blockHash] = true;
 
-        blocksByHeight[header.number].push(headerHash);
+        blocksByHeight[header.number].push(blockHash);
         blocksByHeightExisting[header.number] = true;
 
         if (header.number > blockHeightMax) {
             blockHeightMax = header.number;
         }
 
-        // Update longest chain head
-        if (relayedBlock.totalDifficulty > blocks[longestChainHead].totalDifficulty) {
-            longestChainHead = headerHash;
+        // Update longest branch head
+        uint checkpointLongestBranchHead = longestBranchHead[relayedBlock.linkCheckpoint];
+        if (relayedBlock.accumulativeDiff > blocks[checkpointLongestBranchHead].accumulativeDiff) {
+            longestBranchHead[relayedBlock.linkCheckpoint] = blockHash;
         }
 
         return true;
@@ -163,9 +190,8 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
 
         // Save block header info
         // Note that relaying checkpoint block does NOT require parent block relayed,
-        // so we cannot calculate total difficulty normally; instead, we set total difficulty
-        // for checkpoint block to a very big number (+plus block number to guarantee @longestChainHead
-        // is always point to correct value in the case we has all and ONLY checkpoint blocks relayed)
+        // so we cannot calculate accumulative difficulty normally; instead, we set accumulative difficulty
+        // for checkpoint block to a very big number (+plus block number)
         RelayedBlockHeader memory relayedBlock = RelayedBlockHeader({
             parentHash : header.parentHash,
             stateRoot : header.stateRoot,
@@ -173,9 +199,10 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
             receiptsRoot : header.receiptsRoot,
             number : header.number,
             difficulty : header.difficulty,
-            totalDifficulty : header.number.add(0xEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE),
             time : header.timestamp,
-            hash : blockHash
+            hash : blockHash,
+            linkCheckpoint: blockHash,
+            accumulativeDiff : header.number.add(0xEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE)
             });
 
         blocks[blockHash] = relayedBlock;
@@ -199,10 +226,6 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
             blockHeightMax = header.number;
         }
 
-        // Update longest chain head
-        if (relayedBlock.totalDifficulty > blocks[longestChainHead].totalDifficulty) {
-            longestChainHead = blockHash;
-        }
 
         // Check the other blocks with the same height: if other finalized block found, revert its finalized state!
         uint[] memory sameHeightBlocks = blocksByHeight[blocks[blockHash].number];
@@ -234,19 +257,24 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
         // To be finalized, the block must:
         //        (belong to the longest chain) AND
         //        ((has a checkpoint ahead) OR (has at least `finalityConfirms` confirmations) OR (has a finalized child))
-        // We check finality by traverse from longest chain head back to this block
-        require(blocks[longestChainHead].number > blockHeader.number, "Finalize block failed: block is not belong to longest chain");
+        // We check finality by traverse from longest branch head back to this block
+        uint thisLongestBranchHead = longestBranchHead[blockHeader.linkCheckpoint];
+        require(
+            blocks[thisLongestBranchHead].number > blockHeader.number,
+                "Finalize block failed: block is not belong to longest chain"
+        );
 
-        uint backFromBlock = longestChainHead;
+        uint backFromBlock = thisLongestBranchHead;
         // Check if it has a checkpoint block ahead block @blockHeader: if has, we will update @backFromBlock to this checkpoint
         bool hasCheckpointAhead = false;
-        for (uint i = blockHeader.number + 1; i <= blocks[longestChainHead].number; i++) {
+        for (uint i = blockHeader.number + 1; i <= blocks[thisLongestBranchHead].number; i++) {
             if (checkpointBlocksByHeight[i]) {
                 // Checkpoint at number @i found, then we will find out the checkpoint block hash
                 // to assign @backFromBlock to this value
                 uint[] memory blocksAtNumber = blocksByHeight[i];
                 for (uint j = 0; j < blocksAtNumber.length; j++) {
                     if (checkpointBlocks[blocksAtNumber[j]]) {
+                        // We will traverse back from this checkpoint block instead of @thisLongestBranchHead
                         backFromBlock = blocksAtNumber[j];
                         hasCheckpointAhead = true;
                         break;
@@ -259,7 +287,7 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
         uint distanceToTraverseBack = blocks[backFromBlock].number - blockHeader.number;
         bool hasFinalizedChild = false;
         uint count = 0;
-        uint prevBlock = blocks[longestChainHead].hash;
+        uint prevBlock = blocks[backFromBlock].hash;
         while (count < distanceToTraverseBack) {
             require(blockExisting[prevBlock], "Finalize block failed: block is not belong to longest chain");
             if (!hasFinalizedChild && finalizedBlocks[prevBlock]) {

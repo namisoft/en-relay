@@ -11,39 +11,22 @@ contract RopstenNtyRelay is EthNtyRelay {
     }
 
     // Set the first block
-    function _setFirstBlock() internal {
+    function _defineFirstBlock() internal returns (RelayedBlockHeader memory)  {
         // Hard code the first block is #6419330
-        RelayedBlockHeader memory block = RelayedBlockHeader({
+        RelayedBlockHeader memory ret = RelayedBlockHeader({
             parentHash : 0x65d283e7a4ea14e86404c9ad855d59b4a49a9ae4602dd80857c130a8a57de12d,
             stateRoot : 0x87c377f10bfda590c8e3bfa6a6cafeb9736a251439766196ac508cfcbc795a32,
             txRoot : 0xf4cdf600a8b159e94c49f974ea2da5f05516098fab03dd231469e63982a2ab6e,
             receiptsRoot : 0xd8e77b10e522f5f2c1165c74baa0054fca5e90960cdf26b99892106f06f100f7,
             number : 6419330,
             difficulty : 2125760053,
-            totalDifficulty : 6419330 + 0xEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE,
             time : 1568874993,
-            hash : 0xa73ab1a315660100b28ad2121ce7f9df8cd76d250048e5d0ff2f0f458573a1b8
+            hash : 0xa73ab1a315660100b28ad2121ce7f9df8cd76d250048e5d0ff2f0f458573a1b8,
+            linkCheckpoint: 0xa73ab1a315660100b28ad2121ce7f9df8cd76d250048e5d0ff2f0f458573a1b8,
+            accumulativeDiff : 6419330 + 0xEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
             });
 
-        firstBlock = block.hash;
-
-        blocks[block.hash] = block;
-        blockExisting[block.hash] = true;
-
-        verifiedBlocks[block.hash] = true;
-        finalizedBlocks[block.hash] = true;
-
-        blocksByHeight[block.number].push(block.hash);
-        blocksByHeightExisting[block.number] = true;
-
-        blockHeightMax = block.number;
-
-        longestChainHead = block.hash;
-
-        // Mark block as checkpoint block
-        checkpointBlocks[block.hash] = true;
-        checkpointBlocksByHeight[block.number] = true;
-        latestCheckpoint = block.hash;
+       return ret;
     }
 
     // Set checkpoint contract info
