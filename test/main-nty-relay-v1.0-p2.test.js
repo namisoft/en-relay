@@ -4,14 +4,9 @@
  * Time: 14:49
  */
 import {ENRelayContract} from "./helpers/en-relay-contract";
+import {NextyConfig} from "./config";
 
 const assert = require('assert');
-
-const NextyConfig = {
-    RpcUrl: 'http://rpc.testnet.nexty.io:8545',
-    DefaultAccPk: '<please paste your private key here>',
-    DefaultGas: 42000000
-};
 
 const compiledRelayContract = require('../src/contracts/built/MainNtyRelay');
 
@@ -35,7 +30,7 @@ describe('<<Ethereum to Nexty>> Relay contract V1.0 Test 02', () => {
         await relayContract.setFinalityConfirms(2);
     });
 
-    it('longest chain logic test', async () => {
+    it('longest branch logic test', async () => {
         // First, relay from block #9069016 -> #9069022
         await relayContract.relayBlock(headersData[1]);
         await relayContract.relayBlock(headersData[2]);
@@ -72,27 +67,27 @@ describe('<<Ethereum to Nexty>> Relay contract V1.0 Test 02', () => {
                 '0x4cddb8cc4e852e420fbf0c280011376c1ae1dd1169bb34e9a419483ddb6c3922'
         };
         await relayContract.relayBlock(uncle_9069023);
-        // Check that longest chain is point to this uncle block (0x83d75f1fddbb5e4674622efd809e927e1d33413badf06238dc687c1a942a5bbd)
-        let longestChainHead = await relayContract.longestChainHead();
-        assert.equal(longestChainHead, '0x83d75f1fddbb5e4674622efd809e927e1d33413badf06238dc687c1a942a5bbd');
+        // Check that longest branch is point to this uncle block (0x83d75f1fddbb5e4674622efd809e927e1d33413badf06238dc687c1a942a5bbd)
+        let longestBranchHead = await relayContract.longestBranchHead(headersData[0].hash);
+        assert.equal(longestBranchHead, '0x83d75f1fddbb5e4674622efd809e927e1d33413badf06238dc687c1a942a5bbd');
 
         // Now, add mainnet-accepted block #9069023
         await relayContract.relayBlock(headersData[8]);
 
-        // Because difficulty of #9069023 == difficulty of uncle #9069023, longest chain is still point to uncle #9069023
-        longestChainHead = await relayContract.longestChainHead();
-        assert.equal(longestChainHead, '0x83d75f1fddbb5e4674622efd809e927e1d33413badf06238dc687c1a942a5bbd');
+        // Because difficulty of #9069023 == difficulty of uncle #9069023, longest branch is still point to uncle #9069023
+        longestBranchHead = await relayContract.longestBranchHead(headersData[0].hash);
+        assert.equal(longestBranchHead, '0x83d75f1fddbb5e4674622efd809e927e1d33413badf06238dc687c1a942a5bbd');
 
         // Relay next block #9069024
         await relayContract.relayBlock(headersData[9]);
 
-        // Now, longest chain must point to #9069024
-        longestChainHead = await relayContract.longestChainHead();
-        assert.equal(longestChainHead, headersData[9].hash);
+        // Now, longest branch must point to #9069024
+        longestBranchHead = await relayContract.longestBranchHead(headersData[0].hash);
+        assert.equal(longestBranchHead, headersData[9].hash);
     });
 
 
-    it('finalized can be made on the longest chain path', async () => {
+    it('finalized can be made only on the longest branch path', async () => {
         // Relay one more block to enough confirmations for block #9069023
         await relayContract.relayBlock(headersData[10]);
 
@@ -107,7 +102,7 @@ describe('<<Ethereum to Nexty>> Relay contract V1.0 Test 02', () => {
 
         // Try to finalize uncle block #9069023
         let finalized = await relayContract.finalizeBlock('0x83d75f1fddbb5e4674622efd809e927e1d33413badf06238dc687c1a942a5bbd');
-        // It must FAILED because uncle #9069023 is not belong the longest chain
+        // It must FAILED because uncle #9069023 is not belong the longest branch
         assert.notEqual(finalized, null);
         assert.equal(finalized.success, false); // success = false
 

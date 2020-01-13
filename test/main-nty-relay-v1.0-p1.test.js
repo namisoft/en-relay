@@ -4,14 +4,9 @@
  * Time: 14:49
  */
 import {ENRelayContract} from "./helpers/en-relay-contract";
+import {NextyConfig} from "./config";
 
 const assert = require('assert');
-
-const NextyConfig = {
-    RpcUrl: 'http://rpc.testnet.nexty.io:8545',
-    DefaultAccPk: '<please paste your private key here>',
-    DefaultGas: 42000000
-};
 
 const compiledRelayContract = require('../src/contracts/built/MainNtyRelay');
 

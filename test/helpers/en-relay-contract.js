@@ -47,15 +47,15 @@ class ENRelayContract extends ContractBase {
             }).catch(_ => null)
     }
 
-    longestChainHead() {
-        return this.invokeCall('longestChainHead', null, this.callerAddress, this.defaultGas)
+    longestBranchHead(checkpoint) {
+        return this.invokeCall('longestBranchHead', [checkpoint], this.callerAddress, this.defaultGas)
             .then(r => {
                 return this.web3.utils.numberToHex(r);
             }).catch(_ => null)
     }
 
     latestCheckpoint() {
-        return this.invokeCall('longestChainHead', null, this.callerAddress, this.defaultGas)
+        return this.invokeCall('latestCheckpoint', null, this.callerAddress, this.defaultGas)
             .then(r => {
                 return this.web3.utils.numberToHex(r);
             }).catch(_ => null)
