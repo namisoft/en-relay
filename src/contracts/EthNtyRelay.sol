@@ -5,7 +5,6 @@
  */
 pragma solidity ^0.5.0;
 
-import "./Ownable.sol";
 import "./SafeMath.sol";
 import "./MerklePatriciaProof.sol";
 
@@ -19,27 +18,44 @@ import "./EthCheckpoint.sol";
  * The EthNtyRelay virtual base contract is in charge of relaying blocks
  * from Ethereum PoW-compliant network to Nexty network.
  */
-contract EthNtyRelay is EthNtyRelayStorage, Ownable {
+contract EthNtyRelay is EthNtyRelayStorage {
     using SafeMath for uint;
 
+    // Checkpoint contract info
     EthCheckpoint.CheckpointContractInfo public checkpointContractInfo;
 
-    uint constant private DEFAULT_FINALITY_CONFIRMS = 13;
-
+    // Block finality confirmations
     uint public finalityConfirms;
+
+    // Initialize flag
+    bool private initialized;
 
     // Define the first block (must be implemented by sub class)
     function _defineFirstBlock() internal returns (RelayedBlockHeader memory) ;
 
-    // Set checkpoint contract info (must be implemented by sub class)
-    function _setCheckpointContractInfo() internal;
+    // Define checkpoint contract info (must be implemented by sub class)
+    function _defineCheckpointContractInfo() internal returns(address contractAddress, address[] memory trustedSigners);
 
-    constructor() internal{
-        finalityConfirms = DEFAULT_FINALITY_CONFIRMS;
+    constructor(uint256 _finalityConfirms) internal{
+        initialize(_finalityConfirms);
+    }
+
+    /**
+   * @dev Object initializer
+   * This method can be called only once to initialize this instance.
+   * It is useful for proxy contract to call this method by DELEGATECALL
+   * to initialize some contract data in the context of the proxy.
+   */
+    function initialize(uint256 _finalityConfirms) public {
+        require(!initialized);
+
+        finalityConfirms = _finalityConfirms;
 
         _setFirstBlock();
 
         _setCheckpointContractInfo();
+
+        initialized = true;
     }
 
     function _setFirstBlock() private{
@@ -48,33 +64,29 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
         firstBlock = toSetBlock.hash;
 
         blocks[toSetBlock.hash] = toSetBlock;
-        blockExisting[toSetBlock.hash] = true;
+        hasBlock[toSetBlock.hash] = true;
 
-        verifiedBlocks[toSetBlock.hash] = true;
-        finalizedBlocks[toSetBlock.hash] = true;
+        hasFinalizedBlock[toSetBlock.hash] = true;
 
         blocksByHeight[toSetBlock.number].push(toSetBlock.hash);
-        blocksByHeightExisting[toSetBlock.number] = true;
+        hasBlockHeight[toSetBlock.number] = true;
 
-        blockHeightMax = toSetBlock.number;
+        maxBlockHeight = toSetBlock.number;
 
         longestBranchHead[toSetBlock.hash] = toSetBlock.hash;
 
         // Mark block as checkpoint block
-        checkpointBlocks[toSetBlock.hash] = true;
-        checkpointBlocksByHeight[toSetBlock.number] = true;
+        hasCheckpoint[toSetBlock.hash] = true;
+        hasCpBlockByHeight[toSetBlock.number] = true;
         latestCheckpoint = toSetBlock.hash;
     }
 
-
-    // Set block finality confirmations number.
-    // Only contract owner can call this function.
-    function setFinalityConfirms(uint _finalityConfirms) public onlyOwner returns (bool) {
-        require(_finalityConfirms > 0, "Set finality confirmations failed: invalid value");
-        if(_finalityConfirms != finalityConfirms){
-            finalityConfirms = _finalityConfirms;
+    function _setCheckpointContractInfo() private{
+        (address contractAddress, address[] memory trustedSigners) = _defineCheckpointContractInfo();
+        checkpointContractInfo.contractAddress = contractAddress;
+        for(uint i=0; i< trustedSigners.length; i++){
+            checkpointContractInfo.hasTrustedSigner[trustedSigners[i]] = true;
         }
-        return true;
     }
 
 
@@ -83,16 +95,16 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
         uint blockHash = EthCommon.calcBlockHeaderHash(_rlpHeader);
 
         // Check block existing
-        require(!blockExisting[blockHash], "Relay block failed: block already relayed");
+        require(!hasBlock[blockHash], "Relay block failed: block already relayed");
 
         // Parse rlp-encoded block header into structure
         EthCommon.BlockHeader memory header = EthCommon.parseBlockHeader(_rlpHeader);
 
         // Check the existence of parent block
-        require(blockExisting[header.parentHash], "Relay block failed: parent block not relayed yet");
+        require(hasBlock[header.parentHash], "Relay block failed: parent block not relayed yet");
 
         // Check block height
-        require(header.number == blocks[header.parentHash].number.add(1), "Relay block failed: invalid block blockHeightMax");
+        require(header.number == blocks[header.parentHash].number.add(1), "Relay block failed: invalid block maxBlockHeight");
 
         // Check timestamp
         require(header.timestamp > blocks[header.parentHash].time, "Relay block failed: invalid timestamp");
@@ -120,14 +132,13 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
             });
 
         blocks[blockHash] = relayedBlock;
-        blockExisting[blockHash] = true;
-        verifiedBlocks[blockHash] = true;
+        hasBlock[blockHash] = true;
 
         blocksByHeight[header.number].push(blockHash);
-        blocksByHeightExisting[header.number] = true;
+        hasBlockHeight[header.number] = true;
 
-        if (header.number > blockHeightMax) {
-            blockHeightMax = header.number;
+        if (header.number > maxBlockHeight) {
+            maxBlockHeight = header.number;
         }
 
         // Update longest branch head
@@ -159,7 +170,7 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
         uint blockHash = EthCommon.calcBlockHeaderHash(_rlpHeader);
 
         // Check if block has already been relayed as a checkpoint
-        require(!checkpointBlocks[blockHash], "Block has been already relayed as a checkpoint before");
+        require(!hasCheckpoint[blockHash], "Block has been already relayed as a checkpoint before");
 
         // Parse rlp-encoded block header into structure
         EthCommon.BlockHeader memory header = EthCommon.parseBlockHeader(_rlpHeader);
@@ -206,32 +217,31 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
             });
 
         blocks[blockHash] = relayedBlock;
-        blockExisting[blockHash] = true;
-        verifiedBlocks[blockHash] = true;
+        hasBlock[blockHash] = true;
         // Finalize block immediately
-        finalizedBlocks[blockHash] = true;
+        hasFinalizedBlock[blockHash] = true;
         // Mark block as checkpoint
-        checkpointBlocks[blockHash] = true;
+        hasCheckpoint[blockHash] = true;
         // Mark block number as checkpoint
-        checkpointBlocksByHeight[blocks[blockHash].number] = true;
+        hasCpBlockByHeight[blocks[blockHash].number] = true;
         // Update latest checkpoint var
         if (blocks[blockHash].number > blocks[latestCheckpoint].number) {
             latestCheckpoint = blockHash;
         }
 
         blocksByHeight[header.number].push(blockHash);
-        blocksByHeightExisting[header.number] = true;
+        hasBlockHeight[header.number] = true;
 
-        if (header.number > blockHeightMax) {
-            blockHeightMax = header.number;
+        if (header.number > maxBlockHeight) {
+            maxBlockHeight = header.number;
         }
 
 
         // Check the other blocks with the same height: if other finalized block found, revert its finalized state!
         uint[] memory sameHeightBlocks = blocksByHeight[blocks[blockHash].number];
         for (uint count = 0; count < sameHeightBlocks.length; count++) {
-            if (sameHeightBlocks[count] != blockHash && finalizedBlocks[sameHeightBlocks[count]]) {
-                finalizedBlocks[sameHeightBlocks[count]] = false;
+            if (sameHeightBlocks[count] != blockHash && hasFinalizedBlock[sameHeightBlocks[count]]) {
+                hasFinalizedBlock[sameHeightBlocks[count]] = false;
                 // We can safety break now because it never has more than 01 other finalized block logically
                 break;
             }
@@ -242,17 +252,17 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
 
 
 
-    function finalizeBlock(uint _blockHeaderHash) public returns (bool){
+    function finalizeBlock(uint _blockHash) public returns (bool){
         // Check block existing
-        require(blockExisting[_blockHeaderHash], "Finalize block failed: block not relayed yet");
+        require(hasBlock[_blockHash], "Finalize block failed: block not relayed yet");
 
         // Check whether block already finalized or not
-        require(!finalizedBlocks[_blockHeaderHash], "Finalize block failed: block already finalized");
+        require(!hasFinalizedBlock[_blockHash], "Finalize block failed: block already finalized");
 
-        RelayedBlockHeader memory blockHeader = blocks[_blockHeaderHash];
+        RelayedBlockHeader memory blockHeader = blocks[_blockHash];
 
         // Require prev block also finalized?
-        //require(finalizedBlocks[blockHeader.parentHash], "Finalize block failed: parent block not finalized yet");
+        //require(hasFinalizedBlock[blockHeader.parentHash], "Finalize block failed: parent block not finalized yet");
 
         // To be finalized, the block must:
         //        (belong to the longest chain) AND
@@ -268,12 +278,12 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
         // Check if it has a checkpoint block ahead block @blockHeader: if has, we will update @backFromBlock to this checkpoint
         bool hasCheckpointAhead = false;
         for (uint i = blockHeader.number + 1; i <= blocks[thisLongestBranchHead].number; i++) {
-            if (checkpointBlocksByHeight[i]) {
+            if (hasCpBlockByHeight[i]) {
                 // Checkpoint at number @i found, then we will find out the checkpoint block hash
                 // to assign @backFromBlock to this value
                 uint[] memory blocksAtNumber = blocksByHeight[i];
                 for (uint j = 0; j < blocksAtNumber.length; j++) {
-                    if (checkpointBlocks[blocksAtNumber[j]]) {
+                    if (hasCheckpoint[blocksAtNumber[j]]) {
                         // We will traverse back from this checkpoint block instead of @thisLongestBranchHead
                         backFromBlock = blocksAtNumber[j];
                         hasCheckpointAhead = true;
@@ -289,8 +299,8 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
         uint count = 0;
         uint prevBlock = blocks[backFromBlock].hash;
         while (count < distanceToTraverseBack) {
-            require(blockExisting[prevBlock], "Finalize block failed: block is not belong to longest chain");
-            if (!hasFinalizedChild && finalizedBlocks[prevBlock]) {
+            require(hasBlock[prevBlock], "Finalize block failed: block is not belong to longest chain");
+            if (!hasFinalizedChild && hasFinalizedBlock[prevBlock]) {
                 hasFinalizedChild = true;
             }
             prevBlock = blocks[prevBlock].parentHash;
@@ -298,19 +308,19 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
         }
 
         require(
-            prevBlock == _blockHeaderHash &&
+            prevBlock == _blockHash &&
         (hasCheckpointAhead || hasFinalizedChild || distanceToTraverseBack >= finalityConfirms),
             "Finalize block failed: not enough confirmations"
         );
 
         // Update block state to 'Finalized'
-        finalizedBlocks[_blockHeaderHash] = true;
+        hasFinalizedBlock[_blockHash] = true;
 
         // Check the other blocks with the same height: if other finalized block found, revert it!
         uint[] memory sameHeightBlocks = blocksByHeight[blockHeader.number];
         for (count = 0; count < sameHeightBlocks.length; count++) {
-            if (sameHeightBlocks[count] != _blockHeaderHash && finalizedBlocks[sameHeightBlocks[count]]) {
-                finalizedBlocks[sameHeightBlocks[count]] = false;
+            if (sameHeightBlocks[count] != _blockHash && hasFinalizedBlock[sameHeightBlocks[count]]) {
+                hasFinalizedBlock[sameHeightBlocks[count]] = false;
                 // We can safety break now because it never has more than 01 other finalized block logically
                 break;
             }
@@ -325,7 +335,7 @@ contract EthNtyRelay is EthNtyRelayStorage, Ownable {
         bytes memory _rlpParentNodes,
         uint256 _blockHash
     ) public view returns (bool){
-        if (!blockExisting[_blockHash]) {
+        if (!hasBlock[_blockHash]) {
             // Block not relayed yet
             return false;
         }

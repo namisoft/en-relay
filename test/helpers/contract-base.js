@@ -52,18 +52,18 @@ export class ContractBase {
                         gas: gas
                     })
                     .on('transactionHash', txHash => {
-                        console.log(`Invoking method ${self.contractAddress}.${method} tx sent successfully`);
-                        console.log(`  TxHash: ${JSON.stringify(txHash)}`);
+                        //console.log(`Invoking method ${self.contractAddress}.${method} tx sent successfully`);
+                        //console.log(`  TxHash: ${JSON.stringify(txHash)}`);
                     })
                     .on('receipt', receipt => {
-                        console.log(`  Tx ${receipt.transactionHash} execution success: block=${receipt.blockNumber}, gasUsed=${receipt.gasUsed}`);
+                        console.log(`Method ${self.contractAddress}.${method} invoked successfully: tx=${receipt.transactionHash}, gasUsed=${receipt.gasUsed}`);
                         resolve({success: true, receipt: receipt});
                     })
                     .on('error', (err, receipt) => {
                         // If no receipt, we have an error occurs during sending
                         if (!receipt) throw  err;
                         // Otherwise, this is out of gas error or execution failed (revert for example)
-                        console.log(`  Tx ${receipt.transactionHash} execution (gasUsed=${receipt.gasUsed}) failed: ${err}`);
+                        console.log(`Method ${self.contractAddress}.${method} invoked failure: err=${err.toString().split("\n")[0]}, gasUsed=${receipt.gasUsed}`);
                         resolve({success: false, receipt: receipt});
                     })
             } catch (err) {
@@ -83,8 +83,7 @@ export class ContractBase {
                     gas: gas
                 }).then(
                     result => {
-                        console.log(`Invoke call method ${self.contractAddress}.${method} done`);
-                        console.log(`   Result: ${JSON.stringify(result)}`);
+                        console.log(`Invoke call method ${self.contractAddress}.${method} done: result=${JSON.stringify(result)}`);
                         resolve(result);
                     }
                 ).catch((err) => {

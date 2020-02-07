@@ -24,9 +24,7 @@ describe('<<Mainnet to Nexty>> Relay contract V1.0 Test 01', () => {
         relayContract.setCaller(NextyConfig.DefaultAccPk);
         relayContract.setDefaultGas(NextyConfig.DefaultGas);
         // Deploy contract to network
-        await relayContract.deploy();
-        // Set small finality confirms to test
-        await relayContract.setFinalityConfirms(3);
+        await relayContract.deploy(3);
     });
 
     it('relay contract deployed', () => {
@@ -82,7 +80,7 @@ describe('<<Mainnet to Nexty>> Relay contract V1.0 Test 01', () => {
     });
 
     it('block #9069016 has been finalized', async () => {
-        const finalized = await relayContract.finalizedBlocks(headersData[1].hash);
+        const finalized = await relayContract.hasFinalizedBlock(headersData[1].hash);
         assert.equal(finalized, true);
     });
 

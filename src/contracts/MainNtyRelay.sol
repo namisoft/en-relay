@@ -5,9 +5,9 @@ import "./EthNtyRelay.sol";
 contract MainNtyRelay is EthNtyRelay {
     string public constant version = "1.0.0";
 
-    constructor() public{
-
+    constructor(uint256 _finalityConfirms) EthNtyRelay(_finalityConfirms) public{
     }
+
 
     // Set the first block
     function _defineFirstBlock() internal returns (RelayedBlockHeader memory) {
@@ -27,12 +27,12 @@ contract MainNtyRelay is EthNtyRelay {
         return ret;
     }
 
-    function _setCheckpointContractInfo() internal {
-        // Hard-coded checkpoint contract info of mainnet
-        checkpointContractInfo.contractAddress = 0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a;
-        checkpointContractInfo.trustedSigners[0x1b2C260efc720BE89101890E4Db589b44E950527] = true;
-        checkpointContractInfo.trustedSigners[0x78d1aD571A1A09D60D9BBf25894b44e4C8859595] = true;
-        checkpointContractInfo.trustedSigners[0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7] = true;
-        checkpointContractInfo.trustedSigners[0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E] = true;
+    function _defineCheckpointContractInfo() internal returns(address contractAddress, address[] memory trustedSigners){
+        contractAddress = 0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a;
+        trustedSigners = new address[](4);
+        trustedSigners[0] = 0x1b2C260efc720BE89101890E4Db589b44E950527;
+        trustedSigners[1] = 0x78d1aD571A1A09D60D9BBf25894b44e4C8859595;
+        trustedSigners[2] = 0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7;
+        trustedSigners[3] = 0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E;
     }
 }

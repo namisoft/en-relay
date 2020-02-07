@@ -1,0 +1,1 @@
+{"contractName":"Proxy","abi":[{"payable":true,"stateMutability":"payable","type":"fallback"}],"bytecode":"0x","sourceMap":"","deployedBytecode":"0x","deployedSourceMap":"","compiler":{"name":"solc","version":"0.5.14+commit.01f1aaa4.Emscripten.clang"},"compileTime":1581071686285}

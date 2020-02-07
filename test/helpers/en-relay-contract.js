@@ -23,15 +23,15 @@ class ENRelayContract extends ContractBase {
         this.defaultGas = gas;
     }
 
-    deploy() {
-        return super.deploy(null, this.callerPk, this.defaultGas)
+    deploy(finalityConfirms) {
+        return super.deploy([finalityConfirms], this.callerPk, this.defaultGas)
             .catch(_ => null);
     }
 
-    setFinalityConfirms(confirms) {
-        return this.invokeSend('setFinalityConfirms', [confirms], null, this.callerPk, this.defaultGas)
-            .catch(_ => null);
-    }
+    // setFinalityConfirms(confirms) {
+    //     return this.invokeSend('setFinalityConfirms', [confirms], null, this.callerPk, this.defaultGas)
+    //         .catch(_ => null);
+    // }
 
     getFinalityConfirms() {
         return this.invokeCall('finalityConfirms', null, this.callerAddress, this.defaultGas)
@@ -61,8 +61,8 @@ class ENRelayContract extends ContractBase {
             }).catch(_ => null)
     }
 
-    blockHeightMax() {
-        return this.invokeCall('blockHeightMax', null, this.callerAddress, this.defaultGas)
+    maxBlockHeight() {
+        return this.invokeCall('maxBlockHeight', null, this.callerAddress, this.defaultGas)
             .catch(_ => null)
     }
 
@@ -90,7 +90,14 @@ class ENRelayContract extends ContractBase {
                 blockHeader.mixHash,
                 blockHeader.nonce
             ]))
-        );
+        ).then(r => {
+            if(r.success) {
+                console.log(`Block #${blockHeader.number} relayed successfully`);
+            }else{
+                console.log(`Block #${blockHeader.number} relayed failure`);
+            }
+            return r;
+        });
     }
 
     relayCheckpointBlock(blockHeader,
@@ -121,16 +128,31 @@ class ENRelayContract extends ContractBase {
             null,
             this.callerPk,
             this.defaultGas
-        ).catch(_ => null);
+        ).then(r => {
+            if(r.success) {
+                console.log(`Checkpoint block #${blockHeader.number} relayed successfully`);
+            }else{
+                console.log(`Checkpoint block #${blockHeader.number} relayed failure`);
+            }
+            return r;
+        }).catch(_ => null);
     }
 
     finalizeBlock(blockHeaderHash) {
         return this.invokeSend('finalizeBlock', [blockHeaderHash], null, this.callerPk, this.defaultGas)
+            .then(r => {
+                if(r.success) {
+                    console.log(`Block ${blockHeaderHash} finalized successfully`);
+                }else{
+                    console.log(`Block ${blockHeaderHash} finalized failure`);
+                }
+                return r;
+            })
             .catch(_ => null);
     }
 
-    finalizedBlocks(blockHeaderHash) {
-        return this.invokeCall('finalizedBlocks', [blockHeaderHash], this.callerAddress, this.defaultGas)
+    hasFinalizedBlock(blockHeaderHash) {
+        return this.invokeCall('hasFinalizedBlock', [blockHeaderHash], this.callerAddress, this.defaultGas)
             .then(r => {
                 return Boolean(r);
             }).catch(_ => null)

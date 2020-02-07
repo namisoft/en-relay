@@ -8,7 +8,7 @@ pragma solidity ^0.5.0;
 library EthCheckpoint {
     struct CheckpointContractInfo {
         address contractAddress;
-        mapping(address => bool) trustedSigners;
+        mapping(address => bool) hasTrustedSigner;
     }
 
     function verifyCheckpoint(
@@ -61,7 +61,7 @@ library EthCheckpoint {
         // Validate signatures
         for (uint i = 0; i < vs.length; i++) {
             address signer = ecrecover(signedHash, vs[i], rs[i], ss[i]);
-            if (!_checkpointContractInfo.trustedSigners[signer]) {
+            if (!_checkpointContractInfo.hasTrustedSigner[signer]) {
                 return false;
             }
         }
