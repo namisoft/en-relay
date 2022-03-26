@@ -31,7 +31,7 @@
     "ethereumjs-tx": "^2.1.2",
     "fs-extra": "^8.1.0",
     "merkle-patricia-tree": "^3.0.0",
-    "minimist": "^1.2.0",
+    "minimist": "^1.2.6",
     "mocha": "^6.2.2",
     "path": "^0.12.7",
     "rlp": "^2.2.4",
